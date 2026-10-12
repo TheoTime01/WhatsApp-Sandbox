@@ -1,16 +1,31 @@
 # WhatsApp Sandbox
 
-A responsive, two-sided WhatsApp conversation and Flow simulator built with Next.js, React, TypeScript, Tailwind CSS, and Framer Motion.
+A responsive, three-phone WhatsApp conversation and Flow simulator built with Next.js, React, TypeScript, Tailwind CSS, and Framer Motion.
 
 ## Features
 
-- Customer and Business/Admin phone previews sharing one message state.
+- Sender, Traveler and Receiver phone previews sharing one group-chat message state.
 - WhatsApp-inspired chat bubbles, timestamps, blue read receipts, phone bezels, dynamic island, and patterned chat background.
-- Animated bottom-sheet appointment Flow with service, date, and time fields.
-- Structured booking submission appears in the customer chat and as an active-flow summary in the business chat.
+- Animated bottom-sheet delivery-request Flow with service, date, and time fields.
+- Structured delivery request from the Sender appears in the shared chat and as an active-flow summary on the Traveler and Receiver phones.
 - Mock Integration Triggered panel shows the latest event payload and endpoint.
-- Send messages from either side, reset the demo, and export the conversation as JSON.
+- Send messages from any phone, reset the demo, and export the conversation as JSON.
 - Responsive layout for desktop and mobile.
+
+## WhatsApp Flows support
+
+Implemented from the WhatsApp Flows documentation (Flow JSON, components, actions, endpoint, lifecycle, webhooks, Cloud API) and the samples in [WhatsApp/WhatsApp-Flows-Tools](https://github.com/WhatsApp/WhatsApp-Flows-Tools).
+
+- **Flow runtime** rendered as a bottom sheet inside each phone, styled after the real WhatsApp Flow UI (floating labels, "(optional)" hints, character counters, disabled Footer until the form is valid).
+- **Components**: TextHeading / TextSubheading / TextBody / TextCaption (`font-weight`, `strikethrough`, `markdown`), RichText (headings, lists, tables, images, links), TextInput (text, number, email, phone, password, passcode, `pattern`, `min-chars`, `max-chars`), TextArea, CheckboxGroup, RadioButtonsGroup (descriptions, metadata, images, colors, `enabled`), Dropdown, OptIn (with "Read more" action), EmbeddedLink, DatePicker (timestamp values before 5.0, `YYYY-MM-DD` after), CalendarPicker (single and range, min/max, unavailable dates, include-days, min/max-days), Image (scale-type, aspect-ratio), PhotoPicker, DocumentPicker, If, Switch and Footer (left/center/right captions).
+- **Actions**: `navigate`, `data_exchange`, `complete`, `open_url`, `on-select-action`; `${form.x}`, `${data.x}` and global `${screen.ID.form|data.x}` references; `init-value(s)`, `error-message(s)`, `visible`, `enabled`, `required`, dynamic `data-source`, `refresh_on_back`, `sensitive` fields (masked in the response summary), Form optional from 4.0.
+- **Mock endpoint** (version 3.0): `ping`, `INIT`, `data_exchange`, `BACK`, error notifications, `flow_token`, `extension_message_response`. Toggle it offline to see client error handling.
+- **Flow JSON validator** following the documented rules: limits (characters, options, components per screen, images, links, opt-ins), version gating (e.g. RichText 5.1, CalendarPicker 6.1, `pattern` 6.2, `open_url` 6.0), If/Switch rules, media-picker rules, routing model, terminal screens, reserved `SUCCESS` id.
+- **Flow Studio**: create, edit, save, publish (with publishing checks), deprecate, duplicate and delete flows; lifecycle states DRAFT, PUBLISHED, DEPRECATED, THROTTLED (10 messages/hour) and BLOCKED, with status-change webhooks and a health simulator; send interactive flow messages (`flow_id` / `flow_name`, `flow_action`, `flow_action_payload`, `mode`) or template messages with a Flow button; endpoint log and metrics.
+- Completing a Flow posts the response into the chat and logs the `nfm_reply` webhook payload.
+- Sample flows include the "Customer feedback" Flow (v7.3).
+
+Not implemented: real AES/RSA payload encryption and WhatsApp CDN media encryption, real Graph API calls, ChipsSelector/NavigationList-style newer components that are not in the documentation provided.
 
 ## Run locally
 
