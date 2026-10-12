@@ -1,19 +1,20 @@
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 export type Dict = Record<string, unknown>;
 
-export type DataItem = { id: string; title: string; description?: string; enabled?: boolean };
+export type DataItem = { id: string; title: string; description?: string; metadata?: string; enabled?: boolean; image?: string; "alt-text"?: string; color?: string };
 
 export type Action =
   | { name: "navigate"; next: { type: "screen"; name: string }; payload?: Dict }
   | { name: "data_exchange"; payload?: Dict }
+  | { name: "open_url"; url: string }
   | { name: "complete"; payload?: Dict };
 
 export type Component = {
   type: string;
   name?: string;
-  text?: string;
+  text?: string | string[];
   label?: string;
-  required?: boolean;
+  required?: boolean | string | Dict;
   visible?: boolean | string;
   enabled?: boolean | string;
   "helper-text"?: string;
@@ -28,7 +29,7 @@ export type Component = {
   "on-click-action"?: Action;
   "on-select-action"?: Action;
   "on-unselect-action"?: Action;
-  "init-values"?: string[] | string;
+  "init-values"?: Dict | string;
   src?: string;
   "alt-text"?: string;
   width?: number;
@@ -47,6 +48,7 @@ export type Screen = {
   data?: Record<string, { type: string; __example__?: unknown }>;
   layout: { type: "SingleColumnLayout"; children: Component[] };
   refresh_on_back?: boolean;
+  sensitive?: string[];
 };
 
 export type FlowJson = {
@@ -56,8 +58,9 @@ export type FlowJson = {
   screens: Screen[];
 };
 
-export type FlowStatus = "DRAFT" | "PUBLISHED" | "DEPRECATED";
-export type FlowRecord = { id: string; name: string; categories: string[]; status: FlowStatus; json: FlowJson; endpoint: boolean };
+export type FlowStatus = "DRAFT" | "PUBLISHED" | "DEPRECATED" | "THROTTLED" | "BLOCKED";
+export type FlowRecord = { id: string; name: string; categories: string[]; status: FlowStatus; json: FlowJson; endpoint: boolean; everPublished?: boolean };
+export type Media = { id: string; file_name: string; mime_type: string; sha256: string };
 
 export type EndpointRequest = { version: "3.0"; action: "ping" | "INIT" | "data_exchange" | "BACK"; screen?: string; data?: Dict; flow_token: string };
 export type EndpointResponse = { version?: "3.0"; screen?: string; data: Dict };
@@ -73,4 +76,6 @@ export type FlowMessageConfig = {
   action: "navigate" | "data_exchange";
   screen: string;
   mode: "draft" | "published";
+  data?: Dict;
+  template?: boolean;
 };

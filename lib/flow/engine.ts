@@ -29,58 +29,6 @@ export function resolve<T>(value: T, scope: Scope): unknown {
 
 export const resolvePayload = (payload: Dict | undefined, scope: Scope) => (resolve(payload ?? {}, scope) as Dict);
 
-export const INPUT_TYPES = ["TextInput", "TextArea", "Dropdown", "RadioButtonsGroup", "CheckboxGroup", "DatePicker", "OptIn", "ChipsSelector"];
-export const CONTENT_TYPES = ["TextHeading", "TextSubheading", "TextBody", "TextCaption", "Image", "EmbeddedLink", "Footer"];
-
-/** Walk components (including Form children and `If`/`Switch` branches). */
-export function walk(children: Component[], visit: (component: Component) => void) {
-  for (const c of children) {
-    visit(c);
-    if (c.children) walk(c.children, visit);
-    if (Array.isArray(c.then)) walk(c.then as Component[], visit);
-    if (Array.isArray(c.else)) walk(c.else as Component[], visit);
-  }
-}
-
-export function validateFlowJson(json: unknown): string[] {
-  const errors: string[] = [];
-  const flow = json as FlowJson;
-  if (!flow || typeof flow !== "object") return ["Flow JSON must be an object."];
-  if (!flow.version) errors.push("Missing required property: version.");
-  if (!Array.isArray(flow.screens) || flow.screens.length === 0) return [...errors, "Flow JSON needs at least one screen."];
-  const ids = new Set<string>();
-  for (const screen of flow.screens) {
-    if (!screen.id) { errors.push("A screen is missing its id."); continue; }
-    if (!/^[A-Za-z_]+$/.test(screen.id)) errors.push(`Screen id "${screen.id}" may only contain letters and underscores.`);
-    if (ids.has(screen.id)) errors.push(`Duplicate screen id "${screen.id}".`);
-    ids.add(screen.id);
-  }
-  if (!flow.screens.some((s) => s.terminal)) errors.push("At least one screen must be terminal.");
-  for (const screen of flow.screens) {
-    const names = new Set<string>();
-    if (screen.layout?.type !== "SingleColumnLayout") errors.push(`${screen.id}: layout.type must be SingleColumnLayout.`);
-    let footers = 0;
-    walk(screen.layout?.children ?? [], (c) => {
-      if (c.type === "Footer") footers += 1;
-      if (INPUT_TYPES.includes(c.type)) {
-        if (!c.name) errors.push(`${screen.id}: ${c.type} is missing "name".`);
-        else if (names.has(c.name)) errors.push(`${screen.id}: duplicate component name "${c.name}".`);
-        else names.add(c.name);
-      }
-      for (const key of ["on-click-action", "on-select-action", "on-unselect-action"] as const) {
-        const action = c[key] as Action | undefined;
-        if (!action) continue;
-        if (!["navigate", "data_exchange", "complete"].includes(action.name)) errors.push(`${screen.id}: unknown action "${action.name}".`);
-        if (action.name === "navigate" && !ids.has(action.next?.name)) errors.push(`${screen.id}: navigate target "${action.next?.name}" does not exist.`);
-        if (action.name === "data_exchange" && !flow.data_api_version) errors.push(`${screen.id}: data_exchange needs "data_api_version" and an endpoint.`);
-      }
-    });
-    if (footers > 1) errors.push(`${screen.id}: only one Footer is allowed per screen.`);
-    if (screen.terminal && footers === 0) errors.push(`${screen.id}: terminal screens need a Footer.`);
-  }
-  return errors;
-}
-
 export const findScreen = (flow: FlowJson, id: string): Screen | undefined => flow.screens.find((s) => s.id === id);
 
 /** Mock Flow endpoint, mirroring the request contract of the WhatsApp Flows endpoint examples. */

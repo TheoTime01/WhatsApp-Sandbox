@@ -63,7 +63,7 @@ function MessageBubble({ message, side, onOpenFlow }: { message: Message; side: 
     {!outgoing && <b className={`sender-name name-${message.from}`}>{ROLES[message.from].label}</b>}
     <span className="flow-reply-title"><CheckCheck size={13} /> {message.text}</span><span className="flow-reply-body">{message.description}</span><MessageTime time={message.time} sent={outgoing} />
   </motion.div>;
-  if (message.kind === "flow") return <motion.div layout initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flow-message-card">
+  if (message.kind === "flow") return <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flow-message-card">
     {message.flow?.header && <div className="flow-card-header">{message.flow.header}</div>}
     <div className="flow-card-copy">{!outgoing && <b className={`sender-name name-${message.from}`}>{ROLES[message.from].label}</b>}<strong>{message.text}</strong><span>{message.description}</span>{message.flow?.footer && <small className="flow-card-footer">{message.flow.footer}</small>}{message.flow?.mode === "draft" && <small className="flow-card-footer">Draft mode</small>}</div>
     <button onClick={onOpenFlow} className="flow-open-button">{message.flow?.cta ?? "Open Flow"} <ArrowUpRight size={15} /></button>
@@ -80,7 +80,7 @@ function MessageTime({ time, sent = false }: { time: string; sent?: boolean }) {
 
 function Phone({ side, messages, flowEnv, onSend, onFlowComplete }: {
   side: Side; messages: Message[]; flowEnv: FlowEnv; onSend: (side: Side, text: string) => void;
-  onFlowComplete: (side: Side, message: Message, flow: FlowRecord, payload: Dict, summary: string) => void;
+  onFlowComplete: (side: Side, message: Message, flow: FlowRecord, payload: Dict, summary: string, success: boolean) => void;
 }) {
   const [running, setRunning] = useState<Message | null>(null);
   const runningFlow = running?.flow ? flowEnv.flows.find((f) => f.id === running.flow?.flowId) : undefined;
@@ -104,9 +104,9 @@ function Phone({ side, messages, flowEnv, onSend, onFlowComplete }: {
       </form>
       <div className="home-indicator"><span /></div>
       {running?.flow && runningFlow && <FlowRuntime key={running.id} flow={runningFlow} endpoint={appointmentEndpoint} endpointOn={flowEnv.endpointOn}
-        config={{ action: running.flow.action, screen: running.flow.screen, flowToken: running.flow.flowToken, draft: running.flow.mode === "draft" } satisfies RunConfig}
+        config={{ action: running.flow.action, screen: running.flow.screen, data: running.flow.data, flowToken: running.flow.flowToken, draft: running.flow.mode === "draft" } satisfies RunConfig}
         onEndpointLog={flowEnv.onEndpointLog} onClose={() => setRunning(null)}
-        onComplete={(payload, summary) => { onFlowComplete(side, running, runningFlow, payload, summary); setRunning(null); }} />}
+        onComplete={(payload, summary, success) => { onFlowComplete(side, running, runningFlow, payload, summary, success); setRunning(null); }} />}
     </div></div>
     <div className="device-caption"><span className="online-dot" />{ROLES[side].caption}<span className="caption-divider">·</span><span>Live synced</span></div>
   </section>;
@@ -132,22 +132,35 @@ export default function Home() {
     setMessages((previous) => [...previous, { id: `${Date.now()}-${Math.random()}`, kind: "text", from: side, text, time: fmtTime() }]);
     log("message.sent", { from: ROLES[side].user, role: ROLES[side].label, text });
   };
+  const sentTimes = useRef<number[]>([]);
   const sendFlowMessage = (from: Side, config: FlowMessageConfig): string | null => {
     const flow = flows.find((f) => f.id === config.flowId);
     if (!flow) return "Select a flow first.";
-    if (config.mode === "published" && flow.status !== "PUBLISHED") return `Flow is ${flow.status}. Publish it or send in draft mode.`;
+    if (flow.status === "BLOCKED") return "Flow is BLOCKED: it cannot be sent or opened until its endpoint health recovers.";
+    if (flow.status === "DEPRECATED") return "Flow is DEPRECATED and can no longer be sent to users.";
+    if (config.mode === "published" && !["PUBLISHED", "THROTTLED"].includes(flow.status)) return "mode=published needs a published Flow. Publish it, or send with mode=draft for testing.";
+    if (config.mode === "draft" && flow.status !== "DRAFT") return "mode=draft sends the current draft version; this Flow has no draft changes (it is " + flow.status + ").";
+    if (config.action === "data_exchange" && !flow.endpoint) return "flow_action=data_exchange needs an endpoint-powered Flow.";
     if (!config.cta.trim() || !config.body.trim()) return "flow_cta and body are required.";
-    setMessages((previous) => [...previous, { id: `${Date.now()}-flow`, kind: "flow", from, text: config.header || flow.name, description: config.body, time: fmtTime(), flow: config }]);
+    if (config.cta.length > 30 || config.body.length > 1024 || config.header.length > 60 || config.footer.length > 60) return "Check limits: flow_cta 30, header 60, footer 60, body 1024 characters.";
+    if (flow.status === "THROTTLED") {
+      const hourAgo = Date.now() - 3600_000; sentTimes.current = sentTimes.current.filter((t) => t > hourAgo);
+      if (sentTimes.current.length >= 10) return "Flow is THROTTLED: only 10 Flow messages can be sent per hour.";
+      sentTimes.current.push(Date.now());
+    }
+    setMessages((previous) => [...previous, { id: `${Date.now()}-flow`, kind: "flow", from, text: config.template ? flow.name : config.header || flow.name, description: config.body, time: fmtTime(), flow: config }]);
     log("flow.message.sent", { endpoint: "POST /{phone-number-id}/messages", from: ROLES[from].user, request: buildCloudApiPayload(config, flow, "recipient") });
     return null;
   };
-  const completeFlow = (side: Side, message: Message, flow: FlowRecord, payload: Dict, summary: string) => {
+  const completeFlow = (side: Side, message: Message, flow: FlowRecord, payload: Dict, summary: string, success: boolean) => {
     setMessages((previous) => [...previous,
       { id: `${Date.now()}-reply`, kind: "flow_reply", from: side, text: flow.name, description: summary, time: fmtTime(), payload },
-      { id: `${Date.now()}-system`, kind: "system", from: side, text: `${ROLES[side].label} completed "${flow.name}"`, time: fmtTime() },
+      { id: `${Date.now()}-system`, kind: "system", from: side, text: `${ROLES[side].label} ${success ? "completed" : "ended"} "${flow.name}"`, time: fmtTime() },
     ]);
-    log("flow.completed", { endpoint: "webhook: messages (interactive.nfm_reply)", from: ROLES[side].user, flow_id: flow.id, flow_message_id: message.id,
-      interactive: { type: "nfm_reply", nfm_reply: { name: "flow", body: "Sent", response_json: JSON.stringify(payload) } } });
+    const other = SIDES.find((x) => x !== side && x !== message.from) ?? message.from;
+    log("flow.completed", { endpoint: "webhook: messages (interactive.nfm_reply)", success,
+      messages: [{ context: { from: ROLES[message.from].user, id: message.id }, from: ROLES[side].user, id: `wamid.${Date.now()}`, type: "interactive", timestamp: String(Math.floor(Date.now() / 1000)),
+        interactive: { type: "nfm_reply", nfm_reply: { name: "flow", body: "Sent", response_json: JSON.stringify(payload) } } }], note: `Flow ID is not part of the response; identify it from flow_token (${String(payload.flow_token)}). Other participant: ${ROLES[other].user}.` });
   };
   const addEndpointLog = (entry: EndpointLog) => { setEndpointLogs((p) => [...p, entry]); };
   const ping = () => {
@@ -177,7 +190,7 @@ export default function Home() {
     <AnimatePresence>{logsOpen && <motion.aside className="integration-panel" initial={{ opacity: 0, y: 20, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20 }}>
       <div className="panel-header"><div className="panel-title-icon"><Zap size={16} /></div><div className="panel-title-copy"><strong>Integration Triggered</strong><span>Mock backend · event inspector</span></div><button onClick={() => setLogsOpen(false)} className="panel-close" aria-label="Close integration panel"><X size={17} /></button></div>
       <div className="panel-body"><div className="event-status"><span className="event-led" />{lastEvent}<span className="event-count">{events.length} event{events.length === 1 ? "" : "s"}</span></div>
-        {events.length === 0 ? <div className="empty-log"><div className="empty-log-icon"><FileText size={20} /></div><div><strong>Waiting for a flow event</strong><p>Submit the booking form or send a message to see the payload here.</p></div></div> : <div className="log-scroll"><pre>{JSON.stringify({ method: "POST", endpoint: events[events.length - 1].type.startsWith("flow") ? "/mock/whatsapp/flow" : events[events.length - 1].type.startsWith("graph") ? "/mock/graph" : "/mock/whatsapp/message", status: 200, event: events[events.length - 1] }, null, 2)}</pre></div>}
+        {events.length === 0 ? <div className="empty-log"><div className="empty-log-icon"><FileText size={20} /></div><div><strong>Waiting for a flow event</strong><p>Submit the booking form or send a message to see the payload here.</p></div></div> : <div className="log-scroll"><pre>{JSON.stringify({ method: "POST", endpoint: events[events.length - 1].type.startsWith("flow") || events[events.length - 1].type.startsWith("webhook") ? "/mock/whatsapp/flow" : events[events.length - 1].type.startsWith("graph") ? "/mock/graph" : "/mock/whatsapp/message", status: 200, event: events[events.length - 1] }, null, 2)}</pre></div>}
       </div><div className="panel-footer"><span><span className="footer-dot" /> Simulator active</span><button onClick={() => setEvents([])}>Clear logs</button></div>
     </motion.aside>}</AnimatePresence>
     {!logsOpen && <button className="reopen-panel" onClick={() => setLogsOpen(true)}><Zap size={15} /> Integration logs {events.length > 0 && <span>{events.length}</span>}</button>}
