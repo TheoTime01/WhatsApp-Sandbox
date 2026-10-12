@@ -1,15 +1,15 @@
 # WhatsApp Sandbox
 
-A responsive, two-sided WhatsApp conversation and Flow simulator built with Next.js, React, TypeScript, Tailwind CSS, and Framer Motion.
+A responsive, three-phone WhatsApp conversation and Flow simulator built with Next.js, React, TypeScript, Tailwind CSS, and Framer Motion.
 
 ## Features
 
-- Customer and Business/Admin phone previews sharing one message state.
+- Sender, Traveler and Receiver phone previews sharing one group-chat message state.
 - WhatsApp-inspired chat bubbles, timestamps, blue read receipts, phone bezels, dynamic island, and patterned chat background.
-- Animated bottom-sheet appointment Flow with service, date, and time fields.
-- Structured booking submission appears in the customer chat and as an active-flow summary in the business chat.
+- Animated bottom-sheet delivery-request Flow with service, date, and time fields.
+- Structured delivery request from the Sender appears in the shared chat and as an active-flow summary on the Traveler and Receiver phones.
 - Mock Integration Triggered panel shows the latest event payload and endpoint.
-- Send messages from either side, reset the demo, and export the conversation as JSON.
+- Send messages from any phone, reset the demo, and export the conversation as JSON.
 - Responsive layout for desktop and mobile.
 
 ## Run locally

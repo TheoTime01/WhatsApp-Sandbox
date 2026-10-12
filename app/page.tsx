@@ -4,11 +4,17 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowDownToLine, ArrowLeft, ArrowUpRight, CalendarDays, Camera, CheckCheck,
-  ChevronDown, Clock3, FileText, Link2, Menu, MessageCircle, MoreVertical,
-  Paperclip, Send, Smile, X, Zap,
+  ChevronDown, Clock3, FileText, Menu, MessageCircle, MoreVertical,
+  Paperclip, Send, Smile, Users, X, Zap,
 } from "lucide-react";
 
-type Side = "customer" | "business";
+type Side = "sender" | "traveler" | "receiver";
+const SIDES: Side[] = ["sender", "traveler", "receiver"];
+const ROLES: Record<Side, { label: string; user: string; initial: string; caption: string }> = {
+  sender: { label: "Sender", user: "User A", initial: "A", caption: "Sender preview" },
+  traveler: { label: "Traveler", user: "User B", initial: "B", caption: "Traveler preview" },
+  receiver: { label: "Receiver", user: "User C", initial: "C", caption: "Receiver preview" },
+};
 type Message = {
   id: string;
   kind: "text" | "flow" | "system";
@@ -20,12 +26,13 @@ type Message = {
 };
 type LogEvent = { id: string; type: string; at: string; payload: Record<string, unknown> };
 type Booking = { service: string; date: string; time: string; status: string };
+const ROLE_NOTE: Record<Side, string> = { sender: "Fill in the parcel details", traveler: "Awaiting your confirmation", receiver: "Parcel is on its way once confirmed" };
 
 const initialMessages: Message[] = [
-  { id: "seed-1", kind: "text", from: "business", text: "Hello, I am providing support!", time: "2:23 PM" },
-  { id: "seed-2", kind: "text", from: "customer", text: "Book your appointment test?", time: "2:23 PM" },
-  { id: "seed-3", kind: "flow", from: "business", text: "Book your appointment", description: "Book your appointment", time: "2:33 PM" },
-  { id: "seed-4", kind: "text", from: "customer", text: "Yes", time: "2:34 PM" },
+  { id: "seed-1", kind: "text", from: "traveler", text: "Hi both! I'm flying to Lisbon on the 15th and have space in my bag.", time: "2:23 PM" },
+  { id: "seed-2", kind: "text", from: "sender", text: "Great, I have a parcel to send. Can I request a delivery?", time: "2:23 PM" },
+  { id: "seed-3", kind: "flow", from: "traveler", text: "Request a delivery", description: "Share the parcel details and pickup slot", time: "2:33 PM" },
+  { id: "seed-4", kind: "text", from: "receiver", text: "I'll be waiting in Lisbon!", time: "2:34 PM" },
 ];
 const fmtTime = () => new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const fmtDate = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -37,8 +44,8 @@ function PhoneStatus() {
 function ChatHeader({ side }: { side: Side }) {
   return <div className="chat-header">
     <ArrowLeft size={23} strokeWidth={1.8} className="chat-back" />
-    <div className={`profile-avatar ${side === "business" ? "avatar-admin" : ""}`}>{side === "customer" ? <MessageCircle size={18} /> : "J"}</div>
-    <div className="chat-identity"><strong>{side === "customer" ? "Travel Ease Support" : "John · Customer Support"}</strong><span>{side === "customer" ? "business account" : "online"}</span></div>
+    <div className={`profile-avatar avatar-${side}`}><Users size={18} /></div>
+    <div className="chat-identity"><strong>Parcel Delivery Group</strong><span>You are the {ROLES[side].label}</span></div>
     <div className="chat-header-tools"><Camera size={18} /><MoreVertical size={19} /></div>
   </div>;
 }
@@ -49,9 +56,9 @@ function MessageBubble({ message, side, onOpenFlow }: { message: Message; side: 
   const outgoing = message.from === side;
   if (message.kind === "system") return <div className="system-message">{message.text}</div>;
   if (message.kind === "flow") {
-    if (side === "customer") return <motion.div layout initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flow-message-card">
+    if (side === "sender") return <motion.div layout initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flow-message-card">
       <div className="flow-card-copy"><strong>{message.text}</strong><span>{message.description}</span></div>
-      <button onClick={onOpenFlow} className="flow-open-button">Choose Date &amp; Time <ArrowUpRight size={15} /></button>
+      <button onClick={onOpenFlow} className="flow-open-button">Request Delivery <ArrowUpRight size={15} /></button>
       <span className="card-timestamp">{message.time}</span>
     </motion.div>;
     return <motion.div layout initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="bubble incoming flow-incoming">
@@ -59,7 +66,7 @@ function MessageBubble({ message, side, onOpenFlow }: { message: Message; side: 
     </motion.div>;
   }
   return <motion.div layout initial={{ opacity: 0, y: 5, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className={`bubble ${outgoing ? "outgoing" : "incoming"}`}>
-    <span>{message.text}</span><MessageTime time={message.time} sent={outgoing} />
+    {!outgoing && <b className={`sender-name name-${message.from}`}>{ROLES[message.from].label}</b>}<span>{message.text}</span><MessageTime time={message.time} sent={outgoing} />
   </motion.div>;
 }
 
@@ -75,13 +82,13 @@ function Phone({ side, messages, booking, onOpenFlow, onSend }: {
   useEffect(() => { if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight; }, [messages, booking]);
   const submit = (event: FormEvent) => { event.preventDefault(); const text = draft.trim(); if (!text) return; onSend(side, text); setDraft(""); };
   return <section className="device-column">
-    <div className="device-label"><span className={`view-avatar ${side === "business" ? "view-avatar-admin" : ""}`}>{side === "customer" ? "A" : "B"}</span><span>{side === "customer" ? "User A View" : "User B View"} <small>({side === "customer" ? "Customer" : "Business/Admin"})</small></span></div>
+    <div className="device-label"><span className={`view-avatar view-avatar-${side}`}>{ROLES[side].initial}</span><span>{ROLES[side].user} View <small>({ROLES[side].label})</small></span></div>
     <div className="phone-frame"><div className="phone-screen">
       <PhoneStatus /><ChatHeader side={side} />
       <div className="chat-canvas" ref={scroller}>
         <div className="day-chip">Today</div>
         {messages.map((message) => <MessageBubble key={message.id} message={message} side={side} onOpenFlow={onOpenFlow} />)}
-        {booking && side === "business" && <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="booking-summary"><div className="booking-summary-title"><span className="booking-status-dot" />Active Flow: Appointment Booking</div><p><strong>User A selected:</strong> {booking.date}, {booking.time}</p><div className="booking-summary-meta">{booking.service}<span>Awaiting Confirmation</span></div></motion.div>}
+        {booking && side !== "sender" && <motion.div layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="booking-summary"><div className="booking-summary-title"><span className="booking-status-dot" />Active Flow: Delivery Request</div><p><strong>{ROLES.sender.user} requested:</strong> {booking.service}, pickup {booking.date}, {booking.time}</p><div className="booking-summary-meta">{ROLE_NOTE[side]}<span>{booking.status}</span></div></motion.div>}
       </div>
       <form className="chat-input-bar" onSubmit={submit}>
         <button type="button" className="input-icon" aria-label="Emoji"><Smile size={20} /></button>
@@ -91,7 +98,7 @@ function Phone({ side, messages, booking, onOpenFlow, onSend }: {
       </form>
       <div className="home-indicator"><span /></div>
     </div></div>
-    <div className="device-caption"><span className="online-dot" />{side === "customer" ? "Customer preview" : "Business preview"}<span className="caption-divider">·</span><span>Live synced</span></div>
+    <div className="device-caption"><span className="online-dot" />{ROLES[side].caption}<span className="caption-divider">·</span><span>Live synced</span></div>
   </section>;
 }
 
@@ -108,14 +115,14 @@ function BookingSheet({ onClose, onSubmit }: { onClose: () => void; onSubmit: (b
   };
   return <motion.div className="sheet-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <motion.form className="booking-sheet" onSubmit={submit} initial={{ y: 60, opacity: 0.7 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }} transition={{ type: "spring", damping: 27, stiffness: 280 }}>
-      <div className="sheet-grabber" /><div className="sheet-topline"><div><div className="sheet-eyebrow">WHATSAPP FLOW · SCREEN 1 OF 1</div><h2>Book your appointment</h2><p>Choose a service and a time that works for you.</p></div><button type="button" onClick={onClose} className="sheet-close" aria-label="Close booking flow"><X size={19} /></button></div>
-      <label className="form-field"><span>Select Service <b>*</b></span><span className="select-wrap"><select required value={service} onChange={(e) => setService(e.target.value)}><option value="">Choose a service</option><option>Travel consultation</option><option>Trip planning session</option><option>Booking support</option></select><ChevronDown size={16} /></span></label>
-      <label className="form-field"><span>Select Date <b>*</b></span><span className="field-icon-wrap"><input type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} required /><CalendarDays size={17} /></span></label>
-      <label className="form-field"><span>Select Time <b>*</b></span><span className="select-wrap"><select required value={time} onChange={(e) => setTime(e.target.value)}><option value="">Choose a time</option><option>10:00 AM</option><option>12:00 PM</option><option>2:00 PM</option><option>3:30 PM</option><option>4:00 PM</option></select><Clock3 size={16} /></span></label>
+      <div className="sheet-grabber" /><div className="sheet-topline"><div><div className="sheet-eyebrow">WHATSAPP FLOW · SCREEN 1 OF 1</div><h2>Request a delivery</h2><p>Tell the traveler what you are sending and when.</p></div><button type="button" onClick={onClose} className="sheet-close" aria-label="Close booking flow"><X size={19} /></button></div>
+      <label className="form-field"><span>Parcel Type <b>*</b></span><span className="select-wrap"><select required value={service} onChange={(e) => setService(e.target.value)}><option value="">Choose a parcel type</option><option>Documents</option><option>Small package</option><option>Gift</option></select><ChevronDown size={16} /></span></label>
+      <label className="form-field"><span>Pickup Date <b>*</b></span><span className="field-icon-wrap"><input type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} required /><CalendarDays size={17} /></span></label>
+      <label className="form-field"><span>Pickup Time <b>*</b></span><span className="select-wrap"><select required value={time} onChange={(e) => setTime(e.target.value)}><option value="">Choose a time</option><option>10:00 AM</option><option>12:00 PM</option><option>2:00 PM</option><option>3:30 PM</option><option>4:00 PM</option></select><Clock3 size={16} /></span></label>
       {error && <p className="form-error">{error}</p>}
-      <div className="form-note"><Zap size={14} /><span>Submitting sends a structured mock event to the Business view.</span></div>
+      <div className="form-note"><Zap size={14} /><span>Submitting sends a structured mock event to the Traveler and Receiver views.</span></div>
       <button type="submit" className="confirm-booking">Confirm Booking <ArrowUpRight size={16} /></button>
-      <p className="sheet-disclaimer">This is a sandbox simulation. No real appointment will be created.</p>
+      <p className="sheet-disclaimer">This is a sandbox simulation. No real delivery will be arranged.</p>
     </motion.form>
   </motion.div>;
 }
@@ -136,15 +143,15 @@ export default function Home() {
   };
   const sendMessage = (side: Side, text: string) => {
     setMessages((previous) => [...previous, { id: `${Date.now()}-${Math.random()}`, kind: "text", from: side, text, time: fmtTime() }]);
-    log("message.sent", { from: side === "customer" ? "User A" : "User B", text });
+    log("message.sent", { from: ROLES[side].user, role: ROLES[side].label, text });
   };
   const submitBooking = (next: Booking) => {
     setBooking(next);
     setMessages((previous) => [...previous,
-      { id: `${Date.now()}-booking`, kind: "text", from: "customer", text: `Appointment request: ${next.service} on ${next.date} at ${next.time}.`, time: fmtTime(), payload: { service: next.service, date: next.date, time: next.time } },
-      { id: `${Date.now()}-system`, kind: "system", from: "business", text: "Appointment request sent · Awaiting business confirmation", time: fmtTime() },
+      { id: `${Date.now()}-booking`, kind: "text", from: "sender", text: `Delivery request: ${next.service}, pickup ${next.date} at ${next.time}.`, time: fmtTime(), payload: { service: next.service, date: next.date, time: next.time } },
+      { id: `${Date.now()}-system`, kind: "system", from: "sender", text: "Delivery request sent · Awaiting traveler confirmation", time: fmtTime() },
     ]);
-    log("flow.submit", { flow: "Appointment Booking", service: next.service, date: next.date, time: next.time, status: next.status, source: "User A" });
+    log("flow.submit", { flow: "Delivery Request", parcel: next.service, date: next.date, time: next.time, status: next.status, source: ROLES.sender.user, notified: [ROLES.traveler.user, ROLES.receiver.user] });
     setSheetOpen(false);
   };
   const reset = () => { setMessages(initialMessages); setBooking(null); setEvents([]); eventCounter.current = 0; setLastEvent("Demo reset · ready"); setSheetOpen(false); };
@@ -158,13 +165,11 @@ export default function Home() {
       <div className="topbar-right"><span className="environment-label"><span /> LOCAL PLAYGROUND</span><button className="toolbar-button secondary" onClick={reset}>Reset demo</button><button className="toolbar-button primary" onClick={exportJson}><ArrowDownToLine size={16} /> Export JSON</button><button className="mobile-menu" aria-label="Open menu"><Menu size={19} /></button></div>
     </header>
     <section className="workspace">
-      <div className="workspace-heading"><div><div className="section-kicker">INTERACTIVE DEVELOPER PLAYGROUND</div><h1>Conversation &amp; Flow Simulator</h1><p>Test both sides of a WhatsApp conversation in real time.</p></div><div className="sync-indicator"><span className="sync-pulse" />Both views synced</div></div>
+      <div className="workspace-heading"><div><div className="section-kicker">INTERACTIVE DEVELOPER PLAYGROUND</div><h1>Conversation &amp; Flow Simulator</h1><p>Test a sender, traveler and receiver sharing one WhatsApp conversation in real time.</p></div><div className="sync-indicator"><span className="sync-pulse" />All 3 views synced</div></div>
       <div className="devices-grid">
-        <Phone side="customer" messages={messages} booking={null} onOpenFlow={() => setSheetOpen(true)} onSend={sendMessage} />
-        <div className="sync-bridge" aria-hidden="true"><span /><div><Link2 size={15} /></div><span /></div>
-        <Phone side="business" messages={messages} booking={booking} onOpenFlow={() => setSheetOpen(true)} onSend={sendMessage} />
+        {SIDES.map((side) => <Phone key={side} side={side} messages={messages} booking={booking} onOpenFlow={() => setSheetOpen(true)} onSend={sendMessage} />)}
       </div>
-      <div className="workspace-footer"><div className="footer-note"><span className="footer-icon"><Zap size={16} /></span><span><strong>Live conversation sync</strong><small>Send from either phone. Try the appointment Flow in the customer view to test a structured submission.</small></span></div><span className={`flow-state ${booking ? "submitted" : ""}`}><span />{booking ? "FLOW SUBMITTED" : "FLOW READY"}</span></div>
+      <div className="workspace-footer"><div className="footer-note"><span className="footer-icon"><Zap size={16} /></span><span><strong>Live conversation sync</strong><small>Send from any phone. Try the delivery Flow in the Sender view to test a structured submission.</small></span></div><span className={`flow-state ${booking ? "submitted" : ""}`}><span />{booking ? "FLOW SUBMITTED" : "FLOW READY"}</span></div>
       <div className="canvas-decoration deco-left"><span /><span /><span /></div><div className="canvas-decoration deco-right"><span /><span /><span /></div>
     </section>
     <AnimatePresence>{sheetOpen && <BookingSheet onClose={() => setSheetOpen(false)} onSubmit={submitBooking} />}</AnimatePresence>
