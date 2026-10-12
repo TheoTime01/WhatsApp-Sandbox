@@ -12,6 +12,18 @@ A responsive, three-phone WhatsApp conversation and Flow simulator built with Ne
 - Send messages from any phone, reset the demo, and export the conversation as JSON.
 - Responsive layout for desktop and mobile.
 
+## WhatsApp Flows support
+
+Modelled on the examples in [WhatsApp/WhatsApp-Flows-Tools](https://github.com/WhatsApp/WhatsApp-Flows-Tools) (Flow JSON, endpoint contract, Flow API and Cloud API payloads).
+
+- **Flow JSON runtime** rendered inside each phone: screens with `SingleColumnLayout`, `Form`, `TextHeading/Subheading/Body/Caption`, `TextInput` (text, number, email, phone, password), `TextArea`, `Dropdown`, `RadioButtonsGroup`, `CheckboxGroup`, `DatePicker`, `OptIn`, `EmbeddedLink`, `Image` and `Footer`.
+- **Actions**: `navigate`, `data_exchange`, `complete`, plus `on-select-action`, `${form.x}` / `${data.x}` / `${screen.ID.form.x}` references, `visible` / `enabled`, dynamic `data-source`, required-field and input validation, back navigation, terminal screens.
+- **Mock endpoint** (version 3.0): `ping`, `INIT`, `data_exchange`, `BACK`, error notifications, `flow_token`, `extension_message_response`. Toggle it offline to see client error handling.
+- **Flow Studio**: create, edit (validated JSON), save, publish, deprecate, duplicate and delete flows (DRAFT / PUBLISHED / DEPRECATED), send flow messages (header, body, footer, `flow_cta`, draft/published mode, `navigate` or `data_exchange` start) with the Cloud API payload shown, endpoint request log and metrics.
+- Completing a Flow posts the response into the chat and logs the `nfm_reply` webhook payload.
+
+Not implemented: real AES/RSA payload encryption, newer components (e.g. NavigationList, CalendarPicker, PhotoPicker, ChipsSelector rendering), `If`/`Switch` rendering, templates with Flow buttons, and real Graph API calls.
+
 ## Run locally
 
 Requires Node.js 20.9 or newer.
